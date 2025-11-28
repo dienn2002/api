@@ -8,13 +8,6 @@ from db_config import engine
 
 Base = declarative_base()
 
-from enum import Enum as PyEnum
-
-
-class StatusEnum(PyEnum):
-    IN = "IN"
-    OUT = "OUT"
-
 class User(Base):
     __tablename__ = "users"
 
@@ -23,7 +16,7 @@ class User(Base):
     email = Column(String(255), nullable=False, unique=True)
     face_image = Column(Text, nullable=True)
     plate_image = Column(Text, nullable=True)
-    status = Column(Enum(StatusEnum), nullable=False)
+    status = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     update_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -36,7 +29,7 @@ class History(Base):
     plate_number = Column(String(50), index = True, nullable = False)
     face_image = Column(Text, nullable=True)
     plate_image = Column(Text, nullable=True)
-    status = Column(Enum(StatusEnum), nullable=False)
+    status = Column(Text, nullable=False)
     count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     update_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

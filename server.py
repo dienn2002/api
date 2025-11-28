@@ -12,6 +12,7 @@ from ultralytics import YOLO
 from paddleocr import PaddleOCR
 from sqlalchemy import func
 from message_error import MessageError
+import constant as const
 
 
 # ___________Khởi tạo ứng dụng FastAPI_____________________
@@ -42,12 +43,21 @@ def root():
 @api_v1.post("/access-control/request")
 async def handle_request(request: AccessControlRequest):
     try:
-        print(request.type)
+        if not validate_type_request(request.type):
+            return  AccessControlResponse(
+                is_success = False,
+                error_code = MessageError.TYPE_NOT_SUPPORTED.code(),
+                error_message = MessageError.TYPE_NOT_SUPPORTED.message()
+            )
+
         plate_number = retrievePlateNumber(request.plate_image)
-        print("[PLATE_NUMBER]" + plate_number)
 
         if not plate_number:
-            raise HTTPException(status_code = 400, detail = "Không đọc được biển số xe. Thử lại đi.")
+            return AccessControlResponse(
+                is_success = False,
+                error_code = MessageError.DETECT_PLATE_NUMBER_ERROR.code(),
+                error_message = MessageError.DETECT_PLATE_NUMBER_ERROR.message()
+            )
         
         with session_scope() as session:
             user = (
@@ -58,61 +68,69 @@ async def handle_request(request: AccessControlRequest):
             )
     
             if user:
-                print("có")
-                print(user.status, type(user.status))
-
-                if user.status == StatusEnum[request.type]:
-                    response = BaseResponse(
+                if user.status == request.type.upper():
+                    # Xe đang IN thi request OUT moi chap nhan - hieu khong -                   
+                    response = AccessControlResponse(
                         is_success = False,
-                        error_code = MessageError.NOT_FOUND.code,
-                        error_message = MessageError.NOT_FOUND.message
+                        plate_number = plate_number,
+                        face_image = user.face_image,
+                        error_code = MessageError.STATUS_INVALID.code(),
+                        error_message = MessageError.STATUS_INVALID.message()
                     )
 
-                    print(response.is_success)
-
-                    return response
-
-
-                response = AccessControlResponse(
-                    is_success = True,
-                    plate_number = plate_number,
-                    face_image = user.face_image
-                )
+                else:
+                    response = AccessControlResponse(
+                        is_success = True,
+                        plate_number = plate_number,
+                        face_image = user.face_image
+                    )
             
             else:
-                print("không")
                 response = AccessControlResponse(
                     is_success = False,
-                    error_code = MessageError.NOT_FOUND.code,
-                    error_message = MessageError.NOT_FOUND.message
+                    plate_number = plate_number,
+                    error_code = MessageError.NOT_FOUND.code(),
+                    error_message = MessageError.NOT_FOUND.message()
                 )
-
+        print("[HANDLE_REQUEST] - type: " + str(request.type) + " plate_number: " + plate_number + " response: " + str(response)[:50])
         return response
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(e)
+        return  AccessControlResponse(
+            is_success = False,
+            error_code = MessageError.SERVER_ERROR.code(),
+            error_message = MessageError.SERVER_ERROR.message()
+        )
     
 @api_v1.post("/access-control/success")
 async def handle_approval_request(request_data: ApprovalRequest):
     try:
-        validate_type_request(request_data.approval_type)
+        if not validate_type_request(request_data.approval_type):
+            return  AccessControlResponse(
+                is_success = False,
+                error_code = MessageError.TYPE_NOT_SUPPORTED.code(),
+                error_message = MessageError.TYPE_NOT_SUPPORTED.message()
+            )
 
         new_history = History(
             plate_number=request_data.plate_number,
             face_image=request_data.face_image,
             plate_image=request_data.plate_image,
-            status=StatusEnum[request_data.approval_type],
+            status=request_data.approval_type,
             count=get_next_count_for_plate(request_data.plate_number, request_data.approval_type), # thêm DK vao ra
         )
 
         with session_scope() as session:
             session.add(new_history)
-            print("[INSERT_HISTTORY] [IN] successfully!")
+            print("[INSERT_HISTTORY] [" + request_data.approval_type + "] successfully!")
         
             session.query(User).filter(
                 User.plate_number == request_data.plate_number
             ).update(
-                {User.status: StatusEnum[request_data.approval_type]},
+                {
+                    User.status: request_data.approval_type
+                },
                 synchronize_session='fetch'
             )
 
@@ -124,9 +142,9 @@ async def handle_approval_request(request_data: ApprovalRequest):
 
 app.include_router(api_v1)
 
-def validate_type_request(type: str):
-    if type != "IN" and type != "OUT":
-        raise HTTPException(status_code=400, detail=str("TYPE" + type + "support!"))
+def validate_type_request(request_type: str) -> bool:
+    return request_type in (const.IN, const.OUT)
+        
 
 def get_next_count_for_plate(target_plate_number: str, status: str) -> int:
     try:
@@ -190,11 +208,11 @@ async def register_user(
                 email=email,
                 face_image=face_base64,
                 plate_image=None,
-                status=StatusEnum.OUT  #OUT lúc đăng ký (xe chưa đi vào cổng lần nào), đúng với trạng thái “chưa vào bãi”
+                status=const.OUT  #OUT lúc đăng ký (xe chưa đi vào cổng lần nào), đúng với trạng thái “chưa vào bãi”
             )
             session.add(user)
 
-        return {"message": "Đăng ký thành công!", "plate_number": plate_number}
+        return {"message": "Đăng ký thành công!", "plate_number": plate_number}  
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

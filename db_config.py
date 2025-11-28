@@ -6,16 +6,12 @@
 from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
+import constant as const
 # Cấu hình DB
-DB_USER = "root"
-DB_PASSWORD = "123456"
-DB_HOST = "localhost"
-DB_PORT = 3306
-DB_NAME = "smart_gate"
+
 
 # URL kết nối: mysql+pymysql://user:password@host:port/dbname
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = f"mysql+pymysql://{const.DB_USER}:{const.DB_PASSWORD}@{const.DB_HOST}:{const.DB_PORT}/{const.DB_NAME}"
 
 # Tạo engine với pool_size tương tự
 engine = create_engine(

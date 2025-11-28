@@ -13,23 +13,35 @@ def get_plate_number_by_img(img: np.ndarray, yolo_model: any, ocr: any):
     Trả về biển số sạch (A-Z, 0-9) hoặc None nếu không đọc được
     """
     if img is None or img.size == 0:
-        print("Ảnh đầu vào không hợp lệ")
+        print("[ERROR] Ảnh đầu vào không hợp lệ")
         return None
 
     try:
         # Detect biển số bằng YOLO
         results = yolo_model(img)
 
+        if not results: 
+            print("[INFO] YOLO không phát hiện gì.")
+            return None
+        
         for plate in results:
-            if not plate.boxes:
+
+            # if not plate.boxes:
+            if not plate.boxes or len(plate.boxes) == 0:
+                print("[INFO] Plate boxes rỗng, bỏ qua.")
                 continue
 
             for bbox in plate.boxes:
+                if not hasattr(bbox, 'xyxy') or len(bbox.xyxy) == 0:
+                    print("[INFO] bbox.xyxy trống, bỏ qua.")
+                    continue
+
                 x1, y1, x2, y2 = map(int, bbox.xyxy[0])
 
                 # Crop vùng biển số từ ảnh gốc, giữ tỉ lệ
                 plate_img = img[y1:y2, x1:x2]
                 if plate_img is None or plate_img.size == 0:
+                    print("[INFO] Crop plate_img rỗng, bỏ qua.")
                     continue
 
                 # OCR đọc biển số, cls=True để tự xoay nếu nghiêng
@@ -39,17 +51,24 @@ def get_plate_number_by_img(img: np.ndarray, yolo_model: any, ocr: any):
                 if ocr_result and len(ocr_result) > 0:
                     for line in ocr_result[0]:
                         plate_text += line[1][0] + " "
+                else:
+                    print("[INFO] OCR không đọc được gì, bỏ qua.")
+                    continue
 
                 # Lọc ký tự: giữ chữ và số
                 clean_plate_text = re.sub(r'[^A-Z0-9]', '', plate_text.upper().strip())
 
                 if clean_plate_text:
+                    print(f"[DEBUG] Biển số đọc được: {clean_plate_text}")
                     return clean_plate_text
+                else:
+                    print("[INFO] Sau khi lọc ký tự, không còn gì.")
 
+        print("[INFO] Không detect được biển số nào.")
         return None
 
     except Exception as e:
-        print("Lỗi OCR:", e)
+        print("[ERROR] Lỗi OCR:", e)
         return None
 
 
