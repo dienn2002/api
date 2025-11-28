@@ -44,6 +44,10 @@ class AccessControlRequest(BaseModel):
     plate_image: str
     type: str
 
+class CheckPlateNumber(BaseModel):
+    plate_number: str
+    request_type: str
+
 class BaseResponse(BaseModel):
     is_success: bool
     error_code: Optional[str] = None
@@ -53,10 +57,5 @@ class AccessControlResponse(BaseResponse):
     plate_number: Optional[str] = None
     face_image: Optional[str] = None
 
-
-
-
-
 # Ensure metadata is in sync when the module is imported.
 Base.metadata.create_all(bind=engine)
-

@@ -139,6 +139,56 @@ async def handle_approval_request(request_data: ApprovalRequest):
     except Exception as e:
         print("[handle_approval_request] error: " + e)
         return BaseResponse(is_success = False)
+    
+@api_v1.post("/access-control/check-plate-number")
+async def handle_check_plate_number(request_data: CheckPlateNumber):
+    try:
+        if not validate_type_request(request_data.request_type):
+            return  AccessControlResponse(
+                is_success = False,
+                error_code = MessageError.TYPE_NOT_SUPPORTED.code(),
+                error_message = MessageError.TYPE_NOT_SUPPORTED.message()
+            )
+
+        with session_scope() as session:
+            user = (
+                session.query(User)
+                .filter_by(plate_number=request_data.plate_number)
+                .order_by(User.created_at.desc())
+                .first()
+            )
+    
+            if user:
+                if user.status == request_data.request_type.upper():
+                    # Xe đang IN thi request OUT moi chap nhan - hieu khong -                   
+                    response = AccessControlResponse(
+                        is_success = False,
+                        plate_number = request_data.plate_number,
+                        face_image = user.face_image,
+                        error_code = MessageError.STATUS_INVALID.code(),
+                        error_message = MessageError.STATUS_INVALID.message()
+                    )
+
+                else:
+                    response = AccessControlResponse(
+                        is_success = True,
+                        plate_number = request_data.plate_number,
+                        face_image = user.face_image
+                    )
+            
+            else:
+                response = AccessControlResponse(
+                    is_success = False,
+                    plate_number = request_data.plate_number,
+                    error_code = MessageError.NOT_FOUND.code(),
+                    error_message = MessageError.NOT_FOUND.message()
+                )
+        print("[CHECK_REQUEST] - type: " + str(request_data.request_type) + " plate_number: " + request_data.plate_number + " response: " + str(response)[:50])
+        return response
+
+    except Exception as e:
+        print("[handle_check_plate_number] error: " + e)
+        return BaseResponse(is_success = False)
 
 app.include_router(api_v1)
 
