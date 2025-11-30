@@ -40,7 +40,7 @@ def root():
 
 
 # @app.post("/access-control-in")
-@api_v1.post("/access-control/request")
+@api_v1.post("/access-control/request", response_model_exclude_none=True)
 async def handle_request(request: AccessControlRequest):
     try:
         if not validate_type_request(request.type):
@@ -75,14 +75,18 @@ async def handle_request(request: AccessControlRequest):
                         plate_number = plate_number,
                         face_image = user.face_image,
                         error_code = MessageError.STATUS_INVALID.code(),
-                        error_message = MessageError.STATUS_INVALID.message()
+                        error_message = MessageError.STATUS_INVALID.message(),
+                        full_name = user.full_name
                     )
 
                 else:
                     response = AccessControlResponse(
                         is_success = True,
                         plate_number = plate_number,
-                        face_image = user.face_image
+                        face_image = user.face_image,
+                        update_time = format_db_time(user.update_at),
+                        count = get_max_count_for_plate(plate_number, const.IN),
+                        full_name = user.full_name
                     )
             
             else:
@@ -103,7 +107,44 @@ async def handle_request(request: AccessControlRequest):
             error_message = MessageError.SERVER_ERROR.message()
         )
     
-@api_v1.post("/access-control/success")
+@api_v1.post("/access-control/verify-backup", response_model_exclude_none=True)
+async def handle_approval_request(request_data: VerifyBackup):
+    try:
+        if not validate_type_request(request_data.approval_type):
+            return  AccessControlResponse(
+                is_success = False,
+                error_code = MessageError.TYPE_NOT_SUPPORTED.code(),
+                error_message = MessageError.TYPE_NOT_SUPPORTED.message()
+            )
+
+        new_history = History(
+            plate_number=request_data.plate_number,
+            plate_image=request_data.plate_image,
+            face_image="Xác nhận bởi Nhân Viên",
+            status=request_data.approval_type,
+            count=get_max_count_for_plate(request_data.plate_number, request_data.approval_type) + 1,
+        )
+
+        with session_scope() as session:
+            session.add(new_history)
+            print("[INSERT_HISTTORY] [BACKUP] [" + request_data.approval_type + "] successfully!")
+        
+            session.query(User).filter(
+                User.plate_number == request_data.plate_number
+            ).update(
+                {
+                    User.status: request_data.approval_type
+                },
+                synchronize_session='fetch'
+            )
+
+        return BaseResponse(is_success = True)
+    
+    except Exception as e:
+        print("[handle_approval_request] error: " + e)
+        return BaseResponse(is_success = False)
+    
+@api_v1.post("/access-control/success", response_model_exclude_none=True)
 async def handle_approval_request(request_data: ApprovalRequest):
     try:
         if not validate_type_request(request_data.approval_type):
@@ -118,7 +159,7 @@ async def handle_approval_request(request_data: ApprovalRequest):
             face_image=request_data.face_image,
             plate_image=request_data.plate_image,
             status=request_data.approval_type,
-            count=get_next_count_for_plate(request_data.plate_number, request_data.approval_type), # thêm DK vao ra
+            count=get_max_count_for_plate(request_data.plate_number, request_data.approval_type) + 1,
         )
 
         with session_scope() as session:
@@ -140,15 +181,15 @@ async def handle_approval_request(request_data: ApprovalRequest):
         print("[handle_approval_request] error: " + e)
         return BaseResponse(is_success = False)
     
-@api_v1.post("/access-control/check-plate-number")
+@api_v1.post("/access-control/check-plate-number", response_model_exclude_none=True)
 async def handle_check_plate_number(request_data: CheckPlateNumber):
     try:
         if not validate_type_request(request_data.request_type):
             return  AccessControlResponse(
                 is_success = False,
                 error_code = MessageError.TYPE_NOT_SUPPORTED.code(),
-                error_message = MessageError.TYPE_NOT_SUPPORTED.message()
-            )
+                    error_message = MessageError.TYPE_NOT_SUPPORTED.message()
+                )
 
         with session_scope() as session:
             user = (
@@ -166,14 +207,18 @@ async def handle_check_plate_number(request_data: CheckPlateNumber):
                         plate_number = request_data.plate_number,
                         face_image = user.face_image,
                         error_code = MessageError.STATUS_INVALID.code(),
-                        error_message = MessageError.STATUS_INVALID.message()
+                        error_message = MessageError.STATUS_INVALID.message(),
+                        full_name = user.full_name,
                     )
 
                 else:
                     response = AccessControlResponse(
                         is_success = True,
                         plate_number = request_data.plate_number,
-                        face_image = user.face_image
+                        face_image = user.face_image,
+                        update_time = format_db_time(user.update_at),
+                        count = get_max_count_for_plate(request_data.plate_number, const.IN),
+                        full_name = user.full_name
                     )
             
             else:
@@ -190,13 +235,13 @@ async def handle_check_plate_number(request_data: CheckPlateNumber):
         print("[handle_check_plate_number] error: " + e)
         return BaseResponse(is_success = False)
 
-app.include_router(api_v1)
+# app.include_router(api_v1)
 
 def validate_type_request(request_type: str) -> bool:
     return request_type in (const.IN, const.OUT)
         
 
-def get_next_count_for_plate(target_plate_number: str, status: str) -> int:
+def get_max_count_for_plate(target_plate_number: str, status: str) -> int:
     try:
         # Sử dụng Context Manager để lấy session
         with session_scope() as db:
@@ -210,18 +255,14 @@ def get_next_count_for_plate(target_plate_number: str, status: str) -> int:
             
             # 2. Xử lý giá trị
             if max_count_result is None:
-                # Nếu chưa có bản ghi nào với biển số này, bắt đầu từ 1
-                next_count = 1
-            else:
-                # Tăng giá trị MAX tìm được lên 1
-                next_count = max_count_result + 1
+                max_count_result = 0
                 
-            return next_count
+            return max_count_result
 
     except Exception as e:
         print(f"Lỗi khi truy vấn MAX count cho plate {target_plate_number}: {e}")
         # Trả về 1 hoặc raise lỗi nếu có vấn đề nghiêm trọng
-        return 1
+        return 0
     
 def retrievePlateNumber(plate_image: str) -> str:
     plate_np = cv2.imdecode(np.frombuffer(base64.b64decode(plate_image), np.uint8), cv2.IMREAD_COLOR)
@@ -229,40 +270,157 @@ def retrievePlateNumber(plate_image: str) -> str:
 
 
 
-# đăng ký người dùng
-
-@app.post("/register-user")
-async def register_user(
-    plate_number: str = Form(...),
-    full_name: str = Form(...),
-    email: str = Form(...),
-    image_face: UploadFile = File(...),
-):
+# quan ly người dùng
+@api_v1.post("/access-control/add_user", response_model_exclude_none=True)
+async def add_user(request: AddUser):
+    if not request.user:
+        raise HTTPException(status_code=400, detail="Thiếu dữ liệu người dùng")
     try:
-        # 1. Chuyển ảnh thô thành base64
-        face_bytes = await image_face.read()
-        face_base64 = base64.b64encode(face_bytes).decode("utf-8")
-
-        # 2. Kiểm tra DB xem đã có plate_number hoặc email chưa
         with session_scope() as session:
-            existing_user = session.query(User).filter(
-                (User.plate_number == plate_number) | (User.email == email)
+            exists = session.query(User).filter(
+                (User.email == request.user.email) |
+                (User.phone_number == request.user.phone_number) |
+                (User.plate_number == request.user.plate_number)
             ).first()
-            if existing_user:
-                raise HTTPException(status_code=400, detail="Biển số hoặc email đã tồn tại")
-
-            # 3. Tạo user mới
-            user = User(
-                plate_number=plate_number,
-                full_name=full_name,
-                email=email,
-                face_image=face_base64,
-                plate_image=None,
-                status=const.OUT  #OUT lúc đăng ký (xe chưa đi vào cổng lần nào), đúng với trạng thái “chưa vào bãi”
-            )
+            if exists:
+                raise HTTPException(status_code=400, detail="Email, số điện thoại hoặc biển số đã tồn tại")
+            
+            user = User(**request.user.dict(exclude={"id"}))
             session.add(user)
+            session.commit()
+            session.refresh(user)
+            return {"is_success": True, "message": "Thêm người dùng thành công", "data": {"id": user.id}}
+    except Exception as e:
+        return {"is_success": False, "message": str(e), "data": None}
+    
 
-        return {"message": "Đăng ký thành công!", "plate_number": plate_number}  
+@api_v1.put("/access-control/update-user", response_model_exclude_none=True)
+async def update_user(request: UpdateUser):
+    if not request.user or not request.user.id:
+        raise HTTPException(status_code=400, detail="Thiếu ID người dùng")
+    try:
+        with session_scope() as session:
+            user = session.query(User).filter_by(id=request.user.id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+            for key, value in request.user.dict(exclude_unset=True, exclude={"id"}).items():
+                setattr(user, key, value)
+            session.commit()
+            session.refresh(user)
+            return {"is_success": True, "message": "Cập nhật thành công", "data": {"id": user.id}}
+    except Exception as e:
+        return {"is_success": False, "message": str(e), "data": None}
+
+
+@api_v1.delete("/access-control/delete-user", response_model_exclude_none=True)
+async def delete_user(request: DeleteUser):
+    if not request.user or not request.user.id:
+        raise HTTPException(status_code=400, detail="Thiếu ID người dùng")
+    try:
+        with session_scope() as session:
+            user = session.query(User).filter_by(id=request.user.id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
+            session.delete(user)
+            session.commit()
+            return {"is_success": True, "message": "Xóa thành công", "data": None}
+    except Exception as e:
+        return {"is_success": False, "message": str(e), "data": None}
+
+@api_v1.post("/access-control/search-user-history", response_model=UserHistoryResponse)
+def search_user_history(request_data: CheckPlateNumber):
+    try:
+        if not validate_type_request(request_data.request_type):
+            return UserHistoryResponse(
+                is_success=False,
+                error_code=MessageError.TYPE_NOT_SUPPORTED.code(),
+                error_message=MessageError.TYPE_NOT_SUPPORTED.message()
+            )
+
+        with session_scope() as session:
+            # 1Lấy thông tin user
+            user = (
+                session.query(User)
+                .filter_by(plate_number=request_data.plate_number)
+                .order_by(User.created_at.desc())
+                .first()
+            )
+
+            user_obj = None
+            if user:
+                user_obj = UserItem(
+                    plate_number=user.plate_number,
+                    full_name=user.full_name,
+                    email=user.email,
+                    phone_number=user.phone_number,
+                    status=user.status,
+                    face_image=user.face_image,
+                    plate_image=user.plate_image
+                )
+
+            # Lấy lịch sử 20 bản ghi gần nhất
+            histories = (
+                session.query(History)
+                .filter(History.plate_number == request_data.plate_number)
+                .order_by(History.created_at.desc())
+                .limit(20)
+                .all()
+            )
+
+            history_list = [
+                HistoryItem(
+                    id=h.id,
+                    plate_number=h.plate_number,
+                    status=h.status,
+                    count=h.count,
+                    timestamp=format_db_time(h.created_at)
+                ) for h in histories
+            ]
+
+            # 3Kiểm tra logic IN / OUT
+            if user:
+                if user.status == request_data.request_type.upper():
+                    return UserHistoryResponse(
+                        is_success=False,
+                        user=user_obj,
+                        history=history_list,
+                        error_code=MessageError.STATUS_INVALID.code(),
+                        error_message=MessageError.STATUS_INVALID.message()
+                    )
+                else:
+                    return UserHistoryResponse(
+                        is_success=True,
+                        user=user_obj,
+                        history=history_list,
+                        update_time=format_db_time(user.update_at),
+                        count=get_max_count_for_plate(request_data.plate_number, const.IN)
+                    )
+            else:
+                return UserHistoryResponse(
+                    is_success=False,
+                    history=history_list,
+                    error_code=MessageError.NOT_FOUND.code(),
+                    error_message=MessageError.NOT_FOUND.message()
+                )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return UserHistoryResponse(
+            is_success=False,
+            message=str(e)
+        )
+
+
+from datetime import datetime
+
+def format_db_time(dt_value):
+    if not dt_value:
+        return None
+    
+    # 2. Nếu đúng là kiểu datetime thì format
+    if isinstance(dt_value, datetime):
+        return dt_value.strftime("%H:%M:%S %d/%m/%Y")
+    
+  
+    return str(dt_value)
+
+app.include_router(api_v1)

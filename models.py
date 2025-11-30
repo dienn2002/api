@@ -2,7 +2,7 @@ from sqlalchemy import Column, DateTime, Uuid, String, Text, Integer,func,Column
 from pydantic import BaseModel
 from sqlalchemy.orm import declarative_base
 import uuid
-from typing import Optional
+from typing import Optional, List
 
 from db_config import engine
 
@@ -14,6 +14,7 @@ class User(Base):
     plate_number = Column(String(50), primary_key=True, index=True)
     full_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
+    phone_number = Column(String, unique=True, nullable=False)
     face_image = Column(Text, nullable=True)
     plate_image = Column(Text, nullable=True)
     status = Column(Text, nullable=False)
@@ -39,14 +40,21 @@ class ApprovalRequest(BaseModel):
     face_image: str
     plate_image: str
     approval_type: str
+    
 
 class AccessControlRequest(BaseModel):
     plate_image: str
     type: str
+    
 
 class CheckPlateNumber(BaseModel):
     plate_number: str
     request_type: str
+
+class VerifyBackup(BaseModel):
+    plate_number: str
+    approval_type: str
+    plate_image: str
 
 class BaseResponse(BaseModel):
     is_success: bool
@@ -56,6 +64,63 @@ class BaseResponse(BaseModel):
 class AccessControlResponse(BaseResponse):
     plate_number: Optional[str] = None
     face_image: Optional[str] = None
+    update_time: Optional[str] = None
+    count: Optional[int] = None
+    full_name:  Optional[str] = None
+
+
+class AddUser(BaseModel):
+    full_name: str
+    phone_number: str
+    plate_number: str
+    email: Optional[str] = None
+    face_image: Optional[str] = None
+    plate_image: Optional[str] = None
+class UpdateUser(BaseModel):
+    plate_number: Optional[str] = None
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    face_image: Optional[str] = None
+    plate_image: Optional[str] = None
+
+class DeleteUser(BaseModel):
+    plate_number: str
+
+
+
+
+
+
+# Response models
+class HistoryItem(BaseModel):
+    id: str
+    plate_number: str
+    status: str
+    count: int
+    timestamp: str  # created_at
+
+class UserItem(BaseModel):
+    plate_number: str
+    full_name: str
+    email: Optional[str]
+    phone_number: Optional[str]
+    status: str
+    face_image: Optional[str]
+    plate_image: Optional[str]
+
+class UserHistoryResponse(BaseModel):
+    is_success: bool
+    user: Optional[UserItem] = None
+    history: List[HistoryItem] = []
+    message: Optional[str] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    count: Optional[int] = None
+    update_time: Optional[str] = None
+
+# Request model
+
 
 # Ensure metadata is in sync when the module is imported.
 Base.metadata.create_all(bind=engine)
