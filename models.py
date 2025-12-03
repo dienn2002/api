@@ -87,6 +87,8 @@ class UpdateUser(BaseModel):
 class DeleteUser(BaseModel):
     plate_number: str
 
+class SearchUser(BaseModel):
+    plate_number: str
 
 
 

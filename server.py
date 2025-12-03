@@ -69,7 +69,7 @@ async def handle_request(request: AccessControlRequest):
     
             if user:
                 if user.status == request.type.upper():
-                    # Xe đang IN thi request OUT moi chap nhan - hieu khong -                   
+                    # Xe đang IN thi request OUT moi chap nhan                   
                     response = AccessControlResponse(
                         is_success = False,
                         plate_number = plate_number,
@@ -273,52 +273,55 @@ def retrievePlateNumber(plate_image: str) -> str:
 # quan ly người dùng
 @api_v1.post("/access-control/add_user", response_model_exclude_none=True)
 async def add_user(request: AddUser):
-    if not request.user:
+    if not request:
         raise HTTPException(status_code=400, detail="Thiếu dữ liệu người dùng")
     try:
         with session_scope() as session:
+            # Kiểm tra trùng lặp
             exists = session.query(User).filter(
-                (User.email == request.user.email) |
-                (User.phone_number == request.user.phone_number) |
-                (User.plate_number == request.user.plate_number)
+                (User.email == request.email) |
+                (User.phone_number == request.phone_number) |
+                (User.plate_number == request.plate_number)
             ).first()
             if exists:
                 raise HTTPException(status_code=400, detail="Email, số điện thoại hoặc biển số đã tồn tại")
-            
-            user = User(**request.user.dict(exclude={"id"}))
+
+            user = User(**request.dict())
             session.add(user)
             session.commit()
             session.refresh(user)
             return {"is_success": True, "message": "Thêm người dùng thành công", "data": {"id": user.id}}
     except Exception as e:
         return {"is_success": False, "message": str(e), "data": None}
+
     
 
 @api_v1.put("/access-control/update-user", response_model_exclude_none=True)
 async def update_user(request: UpdateUser):
-    if not request.user or not request.user.id:
-        raise HTTPException(status_code=400, detail="Thiếu ID người dùng")
+    if not request or not request.plate_number:
+        raise HTTPException(status_code=400, detail="Thiếu biển số người dùng")
     try:
         with session_scope() as session:
-            user = session.query(User).filter_by(id=request.user.id).first()
+            user = session.query(User).filter_by(plate_number=request.plate_number).first()
             if not user:
                 raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
-            for key, value in request.user.dict(exclude_unset=True, exclude={"id"}).items():
+            for key, value in request.dict(exclude_unset=True, exclude={"plate_number"}).items():
                 setattr(user, key, value)
             session.commit()
             session.refresh(user)
-            return {"is_success": True, "message": "Cập nhật thành công", "data": {"id": user.id}}
+            return {"is_success": True, "message": "Cập nhật thành công", "data": {"plate_number": user.plate_number}}
     except Exception as e:
         return {"is_success": False, "message": str(e), "data": None}
 
 
+
 @api_v1.delete("/access-control/delete-user", response_model_exclude_none=True)
 async def delete_user(request: DeleteUser):
-    if not request.user or not request.user.id:
-        raise HTTPException(status_code=400, detail="Thiếu ID người dùng")
+    if  not request.plate_number:
+        raise HTTPException(status_code=400, detail="Thiếu biển số người dùng")
     try:
         with session_scope() as session:
-            user = session.query(User).filter_by(id=request.user.id).first()
+            user = session.query(User).filter_by(plate_number=request.plate_number).first()
             if not user:
                 raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
             session.delete(user)
@@ -327,18 +330,26 @@ async def delete_user(request: DeleteUser):
     except Exception as e:
         return {"is_success": False, "message": str(e), "data": None}
 
+
+
+
 @api_v1.post("/access-control/search-user-history", response_model=UserHistoryResponse)
-def search_user_history(request_data: CheckPlateNumber):
+def search_user_history(request_data: SearchUser):
     try:
-        if not validate_type_request(request_data.request_type):
-            return UserHistoryResponse(
-                is_success=False,
-                error_code=MessageError.TYPE_NOT_SUPPORTED.code(),
-                error_message=MessageError.TYPE_NOT_SUPPORTED.message()
-            )
+        if not request_data.plate_number:
+            raise HTTPException(status_code=400, detail="Thiếu biển số xe")
+
+        # if not validate_type_request(request_data.request_type.upper()):
+        #     return UserHistoryResponse(
+        #         is_success=False,
+        #         error_code=MessageError.TYPE_NOT_SUPPORTED.code(),
+        #         error_message=MessageError.TYPE_NOT_SUPPORTED.message()
+        #     )
+
+        # request_type_upper = request_data.request_type.upper()
 
         with session_scope() as session:
-            # 1Lấy thông tin user
+            # Lấy thông tin user
             user = (
                 session.query(User)
                 .filter_by(plate_number=request_data.plate_number)
@@ -378,35 +389,37 @@ def search_user_history(request_data: CheckPlateNumber):
             ]
 
             # 3Kiểm tra logic IN / OUT
-            if user:
-                if user.status == request_data.request_type.upper():
-                    return UserHistoryResponse(
-                        is_success=False,
-                        user=user_obj,
-                        history=history_list,
-                        error_code=MessageError.STATUS_INVALID.code(),
-                        error_message=MessageError.STATUS_INVALID.message()
-                    )
-                else:
-                    return UserHistoryResponse(
-                        is_success=True,
-                        user=user_obj,
-                        history=history_list,
-                        update_time=format_db_time(user.update_at),
-                        count=get_max_count_for_plate(request_data.plate_number, const.IN)
-                    )
-            else:
-                return UserHistoryResponse(
-                    is_success=False,
-                    history=history_list,
-                    error_code=MessageError.NOT_FOUND.code(),
-                    error_message=MessageError.NOT_FOUND.message()
-                )
+            # if user:
+            #     if user.status and user.status.upper() == request_type_upper:
+            #         return UserHistoryResponse(
+            #             is_success=False,
+            #             user=user_obj,
+            #             history=history_list,
+            #             error_code=MessageError.STATUS_INVALID.code(),
+            #             error_message=MessageError.STATUS_INVALID.message()
+            #         )
+            #     else:
+            return UserHistoryResponse(
+                is_success=True if user else False,
+                user=user_obj,
+                history=history_list,
+                update_time=format_db_time(getattr(user, "update_at", user.created_at)) if user else None,
+                count=get_max_count_for_plate(request_data.plate_number, "IN") if user else 0,
+                error_code = None if user else MessageError.NOT_FOUND.code(),
+                error_message = None if user else MessageError.NOT_FOUND.message()
+            )
+            # else:
+            #     return UserHistoryResponse(
+            #         is_success=False,
+            #         history=history_list,
+            #         error_code=MessageError.NOT_FOUND.code(),
+            #         error_message=MessageError.NOT_FOUND.message()
+            #     )
 
     except Exception as e:
         return UserHistoryResponse(
             is_success=False,
-            message=str(e)
+            error_message=str(e)
         )
 
 
