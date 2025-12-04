@@ -3,8 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import declarative_base
 import uuid
 from typing import Optional, List
-
-from db_config import engine
+from configs.db_config import engine
 
 Base = declarative_base()
 
@@ -70,12 +69,13 @@ class AccessControlResponse(BaseResponse):
 
 
 class AddUser(BaseModel):
+    plate_number: str
     full_name: str
     phone_number: str
-    plate_number: str
     email: Optional[str] = None
-    face_image: Optional[str] = None
-    plate_image: Optional[str] = None
+    face_image: str
+    plate_image: str
+
 class UpdateUser(BaseModel):
     plate_number: Optional[str] = None
     full_name: Optional[str] = None
@@ -91,8 +91,11 @@ class SearchUser(BaseModel):
     plate_number: str
 
 
-
-
+class UserResponse(BaseResponse): 
+    full_name: Optional[str] = None
+    plate_number: Optional[str] = None
+    phone_number: Optional[str] = None
+    created_at: Optional[str] = None
 
 # Response models
 class HistoryItem(BaseModel):
@@ -100,7 +103,7 @@ class HistoryItem(BaseModel):
     plate_number: str
     status: str
     count: int
-    timestamp: str  # created_at
+    created_at: str  # created_at
 
 class UserItem(BaseModel):
     plate_number: str
@@ -120,9 +123,6 @@ class UserHistoryResponse(BaseModel):
     error_message: Optional[str] = None
     count: Optional[int] = None
     update_time: Optional[str] = None
-
-# Request model
-
 
 # Ensure metadata is in sync when the module is imported.
 Base.metadata.create_all(bind=engine)

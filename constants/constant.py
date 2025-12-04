@@ -8,3 +8,4 @@ DB_NAME = "smart_gate"
 # Constant 
 IN = "IN"
 OUT = "OUT"
+YOLO_PATH = r"resources\model_ai\best_final.pt"

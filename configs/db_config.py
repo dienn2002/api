@@ -6,7 +6,7 @@
 from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import constant as const
+import constants.constant as const
 # Cấu hình DB
 
 
