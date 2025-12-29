@@ -1,12 +1,12 @@
 from configs.db_config import session_scope
 from repository.user_repository import UserRepository
 from repository.history_repository import HistoryRepository
-from models.schemas.access_schema import AccessControlResponse, BaseResponse
+from persistences.dto.app_dto import AccessControlResponse, BaseResponse
 from utils.plate_utils import retrieve_plate_number
-from utils.time_utils import format_db_time
-from utils.consts import IN, OUT
+from utils.common_utils import format_db_time 
+from constants.constant import IN, OUT
 from constants.message_error import MessageError
-from models.tables.history_model import History
+from persistences.entitys.history import History
 
 class AccessControlService:
     def __init__(self):

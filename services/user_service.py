@@ -53,6 +53,7 @@ class UserService:
             print("[REGISTER] [ERROR]: ", str(e))
             return UserResponse(is_success=False, error_code=MessageError.SERVER_ERROR.code(), error_message=str(e))
 
+
     async def update_user(self, request):
         try:
             print("[UPDATE USER] Request: ", request)
@@ -93,17 +94,37 @@ class UserService:
             print("[UPDATE USER] [ERROR]: ", str(e))
             return UserResponse(is_success=False, error_code=MessageError.SERVER_ERROR.code(), error_message=str(e))
 
+
+
     async def delete_user(self, request):
         try:
             # if not request or not request.plate_number:
             #     return UserResponse(is_success=False, error_code=MessageError.INVALID_INPUT.code(), error_message=MessageError.INVALID_INPUT.message())
+            
             with session_scope() as session:
-                deleted = self.user_repo.delete_user(session, request.plate_number)
+                plate_number = request.plate_number.strip()
+                self.history_repo.delete_by_plate_number(session, plate_number)
+                deleted = self.user_repo.delete_user(session, plate_number)
                 if not deleted:
-                    return UserResponse(is_success=False, plate_number=request.plate_number, error_code=MessageError.NOT_FOUND.code(), error_message=MessageError.NOT_FOUND.message())
-                return UserResponse(is_success=True, plate_number=request.plate_number)
+                    response = UserResponse(
+                        is_success=False, 
+                        plate_number=plate_number, 
+                        error_code=MessageError.NOT_FOUND.code(), 
+                        error_message=MessageError.NOT_FOUND.message())
+                    print("[DELETE USER] Response: ", response)
+                    return response
+                
+                response = UserResponse(
+                    is_success=True, 
+                    plate_number=plate_number)
+                print("[DELETE USER] Response: ", response)
+                return response
         except Exception as e:
-            return UserResponse(is_success=False, error_code=MessageError.UNKNOWN.code(), error_message=str(e))
+            print("[DELETE USER] [ERROR]: ", str(e))
+            return UserResponse(
+                is_success=False, 
+                error_code=MessageError.UNKNOWN.code(), 
+                error_message=str(e))
 
     async def search_user(self, request):
         try:
@@ -113,11 +134,41 @@ class UserService:
                 user = self.user_repo.get_by_plate_number(session, request.plate_number)
 
                 if not user:
-                    return UserHistoryResponse(is_success=False, error_code=MessageError.NOT_FOUND.code(), error_message=MessageError.NOT_FOUND.message(), history=[], count=0)
+                    return UserHistoryResponse(
+                        is_success=False, 
+                        error_code=MessageError.NOT_FOUND.code(), 
+                        error_message=MessageError.NOT_FOUND.message(), 
+                        history=[], count=0)
              
                 histories = self.history_repo.get_by_plate_number(session, request.plate_number)
-                history_list = [HistoryItem(id=h.id, plate_number=h.plate_number, status=h.status, count=h.count, created_at=format_db_time(h.created_at)) for h in histories]
-                user_item = UserItem(plate_number=user.plate_number, full_name=user.full_name, email=user.email, phone_number=user.phone_number, status=user.status, face_image=user.face_image, plate_image=user.plate_image)
-                return UserHistoryResponse(is_success=True, user=user_item, history=history_list, update_time=format_db_time(user.update_at or user.created_at), count=self.history_repo.count_by_plate_and_status(session, request.plate_number, "IN"))
+                history_list = [
+                    HistoryItem(
+                        id=h.id, 
+                        plate_number=h.plate_number, 
+                        status=h.status, 
+                        count=h.count, 
+                        created_at=format_db_time(h.created_at)
+                        )
+                        for h in histories]
+                user_item = UserItem(
+                    plate_number=user.plate_number, 
+                    full_name=user.full_name, 
+                    email=user.email, 
+                    phone_number=user.phone_number, 
+                    status=user.status, 
+                    face_image=user.face_image, 
+                    plate_image=user.plate_image)
+                response = UserHistoryResponse(
+                    is_success=True, 
+                    user=user_item, 
+                    history=history_list, 
+                    update_time=format_db_time(user.update_at or user.created_at), 
+                    count=self.history_repo.count_by_plate_and_status(session, request.plate_number, "IN"))
+                print("[SEARCH USER] Response: ", response)
+                return response
         except Exception as e:
+            print("[SEARCH USER] [ERROR]: ", str(e))
             return UserHistoryResponse(is_success=False, error_code=MessageError.SERVER_ERROR.code(), error_message=str(e), history=[], count=0)
+
+
+    

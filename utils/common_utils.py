@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from datetime import datetime
 
+import math
 def get_max_count_for_plate(plate_number: str, status: str) -> int:
     try:
         with session_scope() as db:
@@ -42,3 +43,4 @@ def format_db_time(dt):
     
 def validate_type_request(request_type: str):
     return request_type and request_type.upper() in [IN, OUT]
+

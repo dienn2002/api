@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, Uuid, String, Text, Integer,func,Column, Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import declarative_base
 import uuid
 from typing import Optional, List
@@ -124,5 +124,31 @@ class UserHistoryResponse(BaseModel):
     count: Optional[int] = None
     update_time: Optional[str] = None
 
-# Ensure metadata is in sync when the module is imported.
+
+class PaymentRequest(BaseModel):
+    plate_number: str
+    
+    
+class PaymentResponse(BaseResponse):
+    is_success: bool
+    payment_code: Optional[str] = None
+    amount: Optional[int] = None
+    qr_code: Optional[str] = None
+    checkout_url : Optional[str] = None
+    message: Optional[str] = None
+
+class LastestInOutResponse(BaseModel):
+    is_success: bool
+    plate_number: str
+    time_in: Optional[str] = None
+    time_out: Optional[str] = None
+    tong_thoi_gian : int = 0
+    so_tien: int = 0
+    error_message: Optional[str] = None  
+    error_code: Optional[str] = None
+
+
+class CreatePaymentRequest(BaseModel):
+    plate_number: str 
+   
 Base.metadata.create_all(bind=engine)

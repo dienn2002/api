@@ -2,7 +2,7 @@ from configs.db_config import session_scope
 from repository.user_repository import UserRepository
 from repository.history_repository import HistoryRepository
 from persistences.dto.app_dto import AccessControlResponse, BaseResponse
-from utils.common_utils import decode_base64_to_cv2, format_db_time
+from utils.common_utils import  format_db_time
 from helpers.ai_helper import AIHelper
 from constants.constant import IN, OUT
 from constants.message_error import MessageError

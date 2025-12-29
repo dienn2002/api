@@ -10,6 +10,7 @@ class MessageError(Enum):
     USER_ALREADY_EXISTS = ('USER_ALREADY_EXISTS', 'Người dùng đã tồn tại')
     NO_DATA_TO_UPDATE = ('NO_DATA_TO_UPDATE', 'Không có dữ liệu để cập nhật')
     UNKNOWN = ('UNKNOWN', 'Lỗi không xác định')
+    HISTORY_NOT_FOUND = ('HISTORY_NOT_FOUND', 'Không tìm thấy lịch sử IN/OUT')
 
     def code(self):
         return self.value[0]
